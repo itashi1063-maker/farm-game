@@ -1,0 +1,100 @@
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    /* خلفية متدرجة توحي بسماء الليل الرمضانية */
+    background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    margin: 0;
+    overflow: hidden;
+}
+
+/* إضافة أيقونة هلال رمزية في الخلفية */
+body::before {
+    content: '🌙';
+    position: absolute;
+    top: 20px;
+    right: 30px;
+    font-size: 3rem;
+    filter: drop-shadow(0 0 10px #ffd700);
+}
+
+.container {
+    background: rgba(255, 255, 255, 0.95);
+    padding: 2.5rem;
+    border-radius: 20px;
+    /* ظل ذهبي خفيف */
+    box-shadow: 0 15px 35px rgba(212, 175, 55, 0.2);
+    text-align: center;
+    width: 90%;
+    max-width: 500px;
+    border: 2px solid #d4af37; /* إطار ذهبي */
+    position: relative;
+}
+
+/* زخرفة علوية */
+.container::after {
+    content: '🏮 ✨ 🏮';
+    display: block;
+    font-size: 1.5rem;
+    margin-bottom: 10px;
+}
+
+h2 { 
+    color: #1a2a6c; 
+    font-family: 'Amiri', serif; /* يفضل استدعاء خط عربي إذا أمكن */
+}
+
+.input-group {
+    margin-top: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+input {
+    padding: 12px;
+    border: 2px solid #c5a059;
+    border-radius: 8px;
+    outline: none;
+    transition: all 0.3s;
+    background-color: #fffdf5;
+}
+
+input:focus { 
+    border-color: #1a2a6c;
+    box-shadow: 0 0 8px rgba(26, 42, 108, 0.3);
+}
+
+button {
+    padding: 12px;
+    /* لون أخضر إسلامي مميز */
+    background-color: #065535;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: bold;
+    transition: transform 0.2s, background-color 0.3s;
+}
+
+button:hover { 
+    background-color: #04432a;
+    transform: scale(1.02);
+}
+
+#statusMessage {
+    margin-top: 15px;
+    font-size: 14px;
+    color: #5d4037;
+    font-style: italic;
+}
+
+/* تأثير أنيميشن بسيط للنجوم في الخلفية */
+@keyframes twinkle {
+    0% { opacity: 0.3; }
+    50% { opacity: 1; }
+    100% { opacity: 0.3; }
+}
