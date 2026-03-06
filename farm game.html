@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>إمبراطورية المزارع 2026 - النسخة النهائية</title>
+    <style>
+        :root { 
+            --orange: #f39c12; --dark: #2c3e50; --grass: #2ecc71; 
+            --red: #e74c3c; --gold: #f1c40f; --sky: #3498db; --purple: #9b59b6;
+        }
+        body { background: #1a1a1a; color: white; font-family: 'Segoe UI', Tahoma; margin: 0; overflow: hidden; display: flex; flex-direction: column; align-items: center; }
+
+        /* HUD */
+        .hud { width: 100%; background: #000; padding: 10px; display: flex; justify-content: space-around; border-bottom: 4px solid var(--orange); z-index: 1000; }
+        .stat-badge { background: #222; padding: 5px 12px; border-radius: 8px; border: 1px solid var(--orange); font-weight: bold; }
+        
+        /* Game View */
+        #game-view { position: relative; width: 98vw; height: 55vh; background: #27ae60; border: 5px solid #1e8449; margin-top: 10px; overflow: hidden; border-radius: 15px; }
+        .farm-grid { display: grid; grid-template-columns: repeat(10, 1fr); gap: 5px; padding: 10px; height: 100%; box-sizing: border-box; }
+        .plot { background: rgba(46, 204, 113, 0.4); border-radius: 8px; border: 1px solid #1e8449; display: flex; align-items: center; justify-content: center; font-size: 25px; position: relative; transition: 0.3s; cursor: pointer; }
+        .plot.tilled { background: #5d4037; }
+        .plot.selected { border: 3px solid white; box-shadow: 0 0 10px white; }
+
+        /* Objects */
+        .placeable { position: absolute; width: 40px; height: 40px; font-size: 30px; cursor: move; z-index: 500; filter: drop-shadow(2px 2px 2px black); }
+
+        /* Pause Menu */
+        #pause-menu { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 10001; flex-direction: column; justify-content: center; align-items: center; gap: 20px; }
+        
+        /* Buyers */
+        .buyer-panel { width: 95vw; background: #333; height: 90px; margin-top: 10px; border-radius: 15px; display: flex; align-items: center; padding: 5px; gap: 10px; overflow-x: auto; border: 2px solid #555; }
+        .buyer-card { background: white; color: black; min-width: 120px; padding: 8px; border-radius: 10px; border: 3px solid var(--orange); text-align: center; font-size: 12px; cursor: pointer; }
+
+        .inventory-bar { display: flex; gap: 8px; background: #222; padding: 10px; border-radius: 15px; width: 95%; overflow-x: auto; margin-top: 10px; }
+        .slot { min-width: 60px; height: 70px; background: #444; border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; border: 3px solid transparent; }
+        .slot.active { border-color: var(--orange); background: #fff; color: black; }
+
+        #shop-ui { display:none; position:fixed; background:rgba(0,0,0,0.95); inset:10px; z-index:9999; border-radius:20px; padding:20px; overflow-y:auto; border: 3px solid var(--gold); }
+        .shop-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; }
+        .btn { padding: 10px; border-radius: 8px; border: none; cursor: pointer; font-weight: bold; color: white; }
+        
+        .crow { position: absolute; font-size: 30px; z-index: 800; transition: all 1.5s linear; pointer-events: none; }
+    </style>
+</head>
+<body>
+
+<div id="pause-menu">
+    <h1 style="color:var(--orange)">⏸️ اللعبة متوقفة</h1>
+    <button class="btn" style="background:var(--grass); width:200px" onclick="togglePause()">استكمال ▶️</button>
+    <button class="btn" style="background:var(--sky); width:200px" onclick="exportFarm()">💾 حفظ (تنزيل ملف)</button>
+    <button class="btn" style="background:var(--purple); width:200px" onclick="document.getElementById('importFile').click()">📂 استيراد (تحميل ملف)</button>
+    <input type="file" id="importFile" style="display:none" onchange="importFarm(event)">
+</div>
+
+<div class="hud">
+    <div class="stat-badge" style="color:gold">💰 <span id="money">100</span>$</div>
+    <div class="stat-badge" style="color:var(--grass)">⭐ ليفل: <span id="lvl">1</span></div>
+    <button class="btn" style="background:var(--red)" onclick="togglePause()">⏸️ Menu</button>
+</div>
+
+<div class="buyer-panel" id="buyer-list"></div>
+
+<div id="game-view" onclick="handleGameViewClick(event)">
+    <div id="farm-grid" class="farm-grid"></div>
+</div>
+
+<div class="inventory-bar" id="inv-slots"></div>
+
+<div style="display:flex; gap:10px; margin-top:5px; width:95%;">
+    <button class="btn" style="background:var(--sky); flex:1;" onclick="buySeeds()">🛒 بذور (50$)</button>
+    <button class="btn" style="background:var(--purple); flex:1;" onclick="openShop()">💎 المتجر الملكي</button>
+</div>
+
+<div id="shop-ui">
+    <h2 style="text-align:center; color:var(--gold)">🐾 المتجر الملكي</h2>
+    <div class="shop-grid" id="shop-container"></div>
+    <button class="btn" style="width:100%; margin-top:20px; background:red;" onclick="closeShop()">إغلاق</button>
+</div>
+
+<script>
+    let money = 100, level = 1, seeds = {corn: 5}, visitors = [];
+    let currentTool = 'hoe', gamePaused = false;
+    let selectedPlots = [], itemToPlace = null;
+
+    const FRUITS = [
+        {id:'corn', emoji:'🌽', price:40, lvl:1, time:5000},
+        {id:'apple', emoji:'🍎', price:70, lvl:2, time:8000},
+        {id:'grapes', emoji:'🍇', price:120, lvl:3, time:12000}
+    ];
+
+    const SHOP_ITEMS = [
+        {id:'sprinkler_1', name:'مرشة عادية', icon:'💧', price:200, type:'sprinkler', speed: 2},
+        {id:'sprinkler_super', name:'مرشة ذهبية', icon:'⛲', price:1000, type:'sprinkler', speed: 5},
+        {id:'dog', name:'كلب حارس', icon:'🐶', price:500, type:'pet', bonus: 20}
+    ];
+
+    function startGame() {
+        renderGrid();
+        renderShop();
+        updateInventory();
+        setInterval(() => { if(!gamePaused) spawnVisitor(); }, 10000);
+        setInterval(() => { if(!gamePaused) spawnCrows(); }, 40000);
+    }
+
+    function renderGrid() {
+        const grid = document.getElementById('farm-grid');
+        grid.innerHTML = '';
+        for(let i=0; i<60; i++) {
+            const p = document.createElement('div');
+            p.className = 'plot';
+            p.onclick = (e) => { e.stopPropagation(); handlePlotClick(p); };
+            grid.appendChild(p);
+        }
+    }
+
+    function handlePlotClick(p) {
+        if(gamePaused) return;
+
+        if(currentTool === 'hoe') {
+            p.classList.add('tilled');
+        } 
+        else if(currentTool === 'scythe') {
+            if(p.dataset.ready) {
+                p.classList.toggle('selected');
+                if(selectedPlots.includes(p)) selectedPlots = selectedPlots.filter(x => x!==p);
+                else selectedPlots.push(p);
+            }
+        } 
+        else if(seeds[currentTool] > 0 && p.classList.contains('tilled') && !p.innerText) {
+            const fruit = FRUITS.find(f => f.id === currentTool);
+            seeds[currentTool]--;
+            p.innerText = '🌱';
+            updateInventory();
+            
+            // حساب سرعة النمو بناءً على المرشات القريبة
+            let growTime = fruit.time;
+            const sprinklers = document.querySelectorAll('.placeable[data-type="sprinkler"]');
+            sprinklers.forEach(s => {
+                const dist = Math.hypot(p.offsetLeft - s.offsetLeft, p.offsetTop - s.offsetTop);
+                if(dist < 150) growTime /= s.dataset.speed;
+            });
+
+            setTimeout(() => {
+                p.innerText = fruit.emoji;
+                p.dataset.ready = "true";
+                p.dataset.fid = fruit.id;
+            }, growTime);
+        }
+    }
+
+    function handleGameViewClick(e) {
+        if(!itemToPlace) return;
+        const rect = document.getElementById('game-view').getBoundingClientRect();
+        const obj = document.createElement('div');
+        obj.className = 'placeable';
+        obj.innerHTML = itemToPlace.icon;
+        obj.dataset.type = itemToPlace.type;
+        obj.dataset.speed = itemToPlace.speed || 1;
+        obj.style.left = (e.clientX - rect.left - 20) + 'px';
+        obj.style.top = (e.clientY - rect.top - 20) + 'px';
+        document.getElementById('game-view').appendChild(obj);
+        itemToPlace = null;
+    }
+
+    function spawnVisitor() {
+        if(visitors.length >= 3) return;
+        const want = FRUITS[Math.floor(Math.random() * Math.min(level, FRUITS.length))];
+        const v = { id: Date.now(), want: want };
+        visitors.push(v);
+        renderVisitors();
+    }
+
+    function renderVisitors() {
+        const div = document.getElementById('buyer-list');
+        div.innerHTML = '';
+        visitors.forEach(v => {
+            const card = document.createElement('div');
+            card.className = 'buyer-card';
+            card.innerHTML = `طلب: ${v.want.emoji}<br>💰 ${v.want.price}$<br><b>اضغط للبيع</b>`;
+            card.onclick = () => sellToVisitor(v);
+            div.appendChild(card);
+        });
+    }
+
+    function sellToVisitor(v) {
+        const matchingPlot = selectedPlots.find(p => p.dataset.fid === v.want.id);
+        if(matchingPlot) {
+            money += v.want.price;
+            matchingPlot.innerText = '';
+            matchingPlot.className = 'plot';
+            delete matchingPlot.dataset.ready;
+            delete matchingPlot.dataset.fid;
+            selectedPlots = selectedPlots.filter(p => p !== matchingPlot);
+            visitors = visitors.filter(vis => vis.id !== v.id);
+            renderVisitors();
+            syncUI();
+        } else {
+            alert("حدد المحصول المطلوب بالمقص أولاً!");
+        }
+    }
+
+    function spawnCrows() {
+        const ready = document.querySelector('.plot[data-ready="true"]');
+        if(!ready) return;
+        const crow = document.createElement('div');
+        crow.className = 'crow'; crow.innerText = '🐦‍⬛';
+        crow.style.left = '-50px'; crow.style.top = '50%';
+        document.getElementById('game-view').appendChild(crow);
+        
+        setTimeout(() => {
+            crow.style.left = ready.offsetLeft + 'px';
+            crow.style.top = ready.offsetTop + 'px';
+        }, 100);
+
+        setTimeout(() => {
+            ready.innerText = ''; delete ready.dataset.ready;
+            crow.style.left = '110%';
+            setTimeout(() => crow.remove(), 2000);
+        }, 3000);
+    }
+
+    function exportFarm() {
+        const data = { money, level, seeds };
+        const blob = new Blob([JSON.stringify(data)], {type: 'application/json'});
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'farm_save.json';
+        a.click();
+    }
+
+    function importFarm(e) {
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            const data = JSON.parse(ev.target.result);
+            money = data.money; level = data.level; seeds = data.seeds;
+            syncUI(); updateInventory(); togglePause();
+        };
+        reader.readAsText(e.target.files[0]);
+    }
+
+    function updateInventory() {
+        const inv = document.getElementById('inv-slots');
+        inv.innerHTML = `<div class="slot ${currentTool==='hoe'?'active':''}" onclick="setTool('hoe')">🔨</div>
+                         <div class="slot ${currentTool==='scythe'?'active':''}" onclick="setTool('scythe')">✂️</div>`;
+        FRUITS.forEach(f => {
+            const s = document.createElement('div');
+            s.className = `slot ${currentTool===f.id?'active':''}`;
+            s.innerHTML = `${f.emoji}<br><small>${seeds[f.id]||0}</small>`;
+            s.onclick = () => setTool(f.id);
+            inv.appendChild(s);
+        });
+    }
+
+    function setTool(t) { currentTool = t; updateInventory(); }
+    function syncUI() { document.getElementById('money').innerText = money; document.getElementById('lvl').innerText = level; }
+    function togglePause() { gamePaused = !gamePaused; document.getElementById('pause-menu').style.display = gamePaused?'flex':'none'; }
+    function openShop() { document.getElementById('shop-ui').style.display = 'block'; }
+    function closeShop() { document.getElementById('shop-ui').style.display = 'none'; }
+    function buySeeds() { if(money>=50){ money-=50; seeds.corn+=5; updateInventory(); syncUI(); } }
+    
+    function renderShop() {
+        const container = document.getElementById('shop-container');
+        SHOP_ITEMS.forEach(item => {
+            container.innerHTML += `<div style="background:#444;padding:10px;border-radius:10px;text-align:center">
+                ${item.icon}<br>${item.name}<br>${item.price}$<br>
+                <button class="btn" style="background:var(--grass)" onclick="buyItem('${item.id}')">شراء</button>
+            </div>`;
+        });
+    }
+
+    function buyItem(id) {
+        const itm = SHOP_ITEMS.find(i => i.id === id);
+        if(money >= itm.price) { money -= itm.price; itemToPlace = itm; closeShop(); syncUI(); alert("اضغط على الأرض لوضعها!"); }
+    }
+
+    startGame();
+</script>
+</body>
+</html>
